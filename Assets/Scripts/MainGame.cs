@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using System.Linq;
-using NUnit.Framework.Interfaces;
+using DG.Tweening;
+using UnityEngine.UI;
 
 public class MainGame : MonoBehaviour
 {
@@ -22,10 +23,62 @@ public class MainGame : MonoBehaviour
 
     bool CanPressLaunch = true;
 
+    [SerializeField] private Transform spinWheelUI;
+    [SerializeField] private Transform spinWheelObj;
+    [SerializeField] private SpinWheel spinWheel;
+
+    public int minSpinwheelCount = 5;
+    public int maxSpinwheelCount = 10;
+    int currentSpinwheelCount = 0;
+    int currentBetCount;
+
+    public GameObject redGemPrefab;
+
+    public Transform coinFallingPoint;
 
     private void Start()
     {
+        currentBetCount = 0;
+        spinWheelUI.gameObject.SetActive(false);
         AssignLaunchButton();
+    }
+
+    IEnumerator ShowSpinWheelIE()
+    {
+        spinWheelObj.localScale = Vector3.zero;
+        spinWheelUI.gameObject.SetActive(true);
+
+        spinWheelUI.GetComponent<Image>().DOFade(200f/255f, 0.5f);
+        spinWheelObj.DOScale(Vector3.one, 0.5f).SetEase(Ease.Linear);
+        yield return new WaitForSeconds(0.5f);
+
+        int result = Random.Range(0, spinWheel.segmentLabels.Length);
+
+        yield return StartCoroutine(spinWheel.StartSpinIE(result));
+
+        //Debug.Log(spinWheel.segmentLabels[result]);
+
+        spinWheelObj.DOScale(Vector3.zero, 0.5f).SetEase(Ease.Linear);
+        spinWheelUI.GetComponent<Image>().DOFade(0, 0.5f);
+        yield return new WaitForSeconds(0.5f);
+
+        spinWheelUI.gameObject.SetActive(false);
+
+        if(spinWheel.segmentLabels[result] == "Red Diamond")
+        {
+
+            Vector3 pos = new Vector3(
+                Random.Range(coinSpawner.minX.position.x, coinSpawner.maxX.position.x), 
+                maxX.position.y, 
+                Random.Range(coinSpawner.minZ.position.z, coinSpawner.maxZ.position.z));
+            GameObject redGem = Instantiate(redGemPrefab, pos, Quaternion.Euler(Random.Range(0, 360), 0, 0));
+        }
+        else if (spinWheel.segmentLabels[result] == "Black Hole")
+        {
+
+        }
+
+        EnableInsertCoin(true);
     }
 
     void AssignLaunchButton()
@@ -51,14 +104,18 @@ public class MainGame : MonoBehaviour
     {
         if (!CanPressLaunch)
             return;
-        CanPressLaunch = false;
-        launchButton1.gameObject.SetActive(false);
-        launchButton2.gameObject.SetActive(false);
+        EnableInsertCoin(false);
         StartCoroutine(InsertCoinIE(coinCount));
     }
 
     IEnumerator InsertCoinIE(int coinCount)
     {
+        if(currentSpinwheelCount == 0)
+        {
+            currentSpinwheelCount = Random.Range(minSpinwheelCount, maxSpinwheelCount);
+        }
+        currentBetCount++;
+
         for (int i = 0; i < coinCount; i++)
         {
             Vector3 pos = new Vector3(Random.Range(minX.position.x, maxX.position.x), maxX.position.y, Random.Range(minZ.position.z, maxZ.position.z));
@@ -85,14 +142,12 @@ public class MainGame : MonoBehaviour
         {
             Coin coin = frontRowCoins[i].GetComponent<Coin>();
             coinsToRemove.Add(frontRowCoins[i]);
-            coin.DropingDown(0.75f);
+            coin.DropingDown(coinFallingPoint.position, 0.75f);
 
             yield return new WaitForSeconds(delayPerCoin);
         }
 
-        CanPressLaunch = true;
-        launchButton1.gameObject.SetActive(true);
-        launchButton2.gameObject.SetActive(true);
+        EnableInsertCoin(currentBetCount < currentSpinwheelCount);
 
         // Remove marked coins after the loop
         foreach (var coin in coinsToRemove)
@@ -121,5 +176,18 @@ public class MainGame : MonoBehaviour
                 }
             }
         }
+
+        if(currentBetCount >= currentSpinwheelCount)
+        {
+            currentBetCount = currentSpinwheelCount = 0;
+            StartCoroutine(ShowSpinWheelIE());
+        }
+    }
+
+    void EnableInsertCoin(bool enable = true)
+    {
+        CanPressLaunch = enable;
+        launchButton1.gameObject.SetActive(enable);
+        launchButton2.gameObject.SetActive(enable);
     }
 }
